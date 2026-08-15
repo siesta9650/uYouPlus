@@ -1,0 +1,71 @@
+# Build uYouPlus as an unsigned IPA for sideloading with AltStore.
+# Adapted from .github/workflows/buildapp.yml (qnblackcat/uYouPlus).
+# AltStore will re-sign the IPA on-device with the user's personal Apple ID,
+# so no code signing credentials are needed here.
+workflows:
+  build-uYouPlus:
+    name: Build uYouPlus (AltStore IPA)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        # Direct URL of a decrypted YouTube IPA. The build detects the
+        # YouTube version from the IPA itself and overrides the Makefile default.
+        YOUTUBE_URL: "https://files.catbox.moe/5a8qlt.ipa"
+      xcode: latest
+    scripts:
+      - name: Checkout submodules
+        script: |
+          git submodule update --init --recursive
+
+      - name: Install dependencies
+        script: |
+          brew install ldid dpkg make
+          # Theos requires GNU make >= 4.x
+          echo "export PATH=\"$(brew --prefix make)/libexec/gnubin:$PATH\"" >> "$CM_ENV"
+
+      - name: Setup Theos
+        script: |
+          export THEOS="$CM_BUILD_DIR/theos"
+          echo "export THEOS=$THEOS" >> "$CM_ENV"
+          git clone --depth 1 --recursive https://github.com/theos/theos.git "$THEOS"
+          # Patched iOS 16.5 SDK (with private frameworks)
+          git clone -n --depth=1 --filter=tree:0 https://github.com/theos/sdks.git /tmp/sdks
+          cd /tmp/sdks
+          git sparse-checkout set --no-cone iPhoneOS16.5.sdk
+          git checkout
+          mkdir -p "$THEOS/sdks"
+          mv iPhoneOS16.5.sdk "$THEOS/sdks/"
+
+      - name: Setup Theos Jailed
+        script: |
+          git clone --depth 1 --recursive https://github.com/qnblackcat/theos-jailed.git "$CM_BUILD_DIR/theos-jailed"
+          cd "$CM_BUILD_DIR/theos-jailed"
+          ./install
+
+      - name: Prepare YouTube IPA
+        script: |
+          cd "$CM_BUILD_DIR"
+          curl -L --fail --silent --show-error "$YOUTUBE_URL" -o YouTube.ipa
+          unzip -q YouTube.ipa
+          YT_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Payload/YouTube.app/Info.plist)"
+          echo "==> YouTube v$YT_VERSION downloaded!"
+          echo "export YOUTUBE_VERSION=$YT_VERSION" >> "$CM_ENV"
+
+      - name: Build package
+        script: |
+          cd "$CM_BUILD_DIR"
+          make package THEOS_PACKAGE_SCHEME=rootless IPA=Payload/YouTube.app FINALPACKAGE=1
+          echo "==> SHASUM256: $(shasum -a 256 packages/*.ipa | cut -f1 -d' ')"
+          echo "==> Bundle ID: com.google.ios.youtube"
+
+    artifacts:
+      - packages/*.ipa
+
+    publishing:
+      email:
+        recipients:
+          - spuro982@gmail.com
+        notify:
+          success: true
+          failure: true
