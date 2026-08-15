@@ -12,18 +12,24 @@ workflows:
         # Direct URL of a decrypted YouTube IPA. The build detects the
         # YouTube version from the IPA itself and overrides the Makefile default.
         YOUTUBE_URL: "https://files.catbox.moe/5a8qlt.ipa"
+        # uYou deb source (required: Makefile's `-n $(UYOU_URL)` test breaks
+        # when this is empty, and this URL is the fallback used by the repo).
+        UYOU_URL: "https://repo.miro92.com/debs/com.miro.uyou_3.0.4_iphoneos-arm.deb"
       xcode: latest
     scripts:
       - name: Checkout submodules
         script: |
+          set -e
           git submodule update --init --recursive
 
       - name: Install dependencies
         script: |
+          set -e
           brew install ldid dpkg make
 
       - name: Setup Theos
         script: |
+          set -e
           export THEOS="$CM_BUILD_DIR/theos"
           git clone --depth 1 --recursive https://github.com/theos/theos.git "$THEOS"
           # Patched iOS 16.5 SDK (with private frameworks)
@@ -36,6 +42,7 @@ workflows:
 
       - name: Setup Theos Jailed
         script: |
+          set -e
           export THEOS="$CM_BUILD_DIR/theos"
           echo "THEOS=$THEOS" >> "$CM_ENV"
           git clone --depth 1 --recursive https://github.com/qnblackcat/theos-jailed.git "$CM_BUILD_DIR/theos-jailed"
@@ -44,6 +51,7 @@ workflows:
 
       - name: Prepare YouTube IPA
         script: |
+          set -e
           cd "$CM_BUILD_DIR"
           curl -L --fail --silent --show-error "$YOUTUBE_URL" -o YouTube.ipa
           unzip -q YouTube.ipa
@@ -53,6 +61,7 @@ workflows:
 
       - name: Build package
         script: |
+          set -e
           export THEOS="$CM_BUILD_DIR/theos"
           # Theos requires GNU make >= 4.x
           export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
