@@ -21,13 +21,10 @@ workflows:
       - name: Install dependencies
         script: |
           brew install ldid dpkg make
-          # Theos requires GNU make >= 4.x
-          echo "export PATH=\"$(brew --prefix make)/libexec/gnubin:$PATH\"" >> "$CM_ENV"
 
       - name: Setup Theos
         script: |
           export THEOS="$CM_BUILD_DIR/theos"
-          echo "export THEOS=$THEOS" >> "$CM_ENV"
           git clone --depth 1 --recursive https://github.com/theos/theos.git "$THEOS"
           # Patched iOS 16.5 SDK (with private frameworks)
           git clone -n --depth=1 --filter=tree:0 https://github.com/theos/sdks.git /tmp/sdks
@@ -39,6 +36,8 @@ workflows:
 
       - name: Setup Theos Jailed
         script: |
+          export THEOS="$CM_BUILD_DIR/theos"
+          echo "THEOS=$THEOS" >> "$CM_ENV"
           git clone --depth 1 --recursive https://github.com/qnblackcat/theos-jailed.git "$CM_BUILD_DIR/theos-jailed"
           cd "$CM_BUILD_DIR/theos-jailed"
           ./install
@@ -50,10 +49,13 @@ workflows:
           unzip -q YouTube.ipa
           YT_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Payload/YouTube.app/Info.plist)"
           echo "==> YouTube v$YT_VERSION downloaded!"
-          echo "export YOUTUBE_VERSION=$YT_VERSION" >> "$CM_ENV"
+          echo "YOUTUBE_VERSION=$YT_VERSION" >> "$CM_ENV"
 
       - name: Build package
         script: |
+          export THEOS="$CM_BUILD_DIR/theos"
+          # Theos requires GNU make >= 4.x
+          export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
           cd "$CM_BUILD_DIR"
           make package THEOS_PACKAGE_SCHEME=rootless IPA=Payload/YouTube.app FINALPACKAGE=1
           echo "==> SHASUM256: $(shasum -a 256 packages/*.ipa | cut -f1 -d' ')"
